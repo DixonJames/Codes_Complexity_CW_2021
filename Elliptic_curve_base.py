@@ -10,6 +10,19 @@ def EEA(modulus, value):
     return a
 
 
+def extended_gcd(a, b):
+    if b == 0:
+        return a,1,0
+
+    d1, s1, t1 = extended_gcd(b, a % b)
+    gcd = d1
+    x = t1
+    y = s1 - (a // b) * t1
+
+    return gcd, x, y
+
+
+
 class FieldNum:
     def __init__(self, value, p):
         self.value = value % p
@@ -30,6 +43,11 @@ class FieldNum:
     def __truediv__(self, other):
         return FieldNum((self * FieldNum(EEA(self.p, other.value), self.p)).value, self.p)
 
+    def __eq__(self, other):
+        if self.value == other.value and self.p == other.p:
+            return True
+        return False
+
 
 class FieldPoint:
     def __init__(self, curve, x, y):
@@ -45,14 +63,21 @@ class FieldPoint:
         elif (other.x == self.curve.inf_point.x and other.y == self.curve.inf_point.y):
             return other
 
-        s_proj = ProjectiveFieldPoint(self.curve, FieldNum(self.x.value, self.p), FieldNum(self.y.value, self.p), FieldNum(1, self.p))
-        o_proj = ProjectiveFieldPoint(other.curve, FieldNum(other.x.value, self.p), FieldNum(other.y.value, self.p), FieldNum(1, self.p))
+        s_proj = ProjectiveFieldPoint(self.curve, FieldNum(self.x.value, self.p), FieldNum(self.y.value, self.p),
+                                      FieldNum(1, self.p))
+        o_proj = ProjectiveFieldPoint(other.curve, FieldNum(other.x.value, self.p), FieldNum(other.y.value, self.p),
+                                      FieldNum(1, self.p))
 
         res_proj = (s_proj + o_proj).convertAffine()
         return res_proj
 
     def __sub__(self, other):
         return self + FieldPoint(self.curve, self.x, FieldNum(-self.y, self.p).value)
+
+    def __eq__(self, other):
+        if self.curve == other.curve and self.x == other.x and self.y == other.y:
+            return True
+        return False
 
     def opOrder(self, intiger):
         tmp = intiger
@@ -62,12 +87,18 @@ class FieldPoint:
                 ops.append(2)
                 tmp = tmp / 2
             else:
-                ops.append(2)
+                ops.append(1)
                 tmp -= 1
         ops.reverse()
         return ops
 
-    def intigerMult(self, integer):
+    def simpleIntMul(self, intiger):
+        temp_point = FieldPoint(self.curve, self.x, self.y)
+        for i in range(intiger - 1):
+            temp_point = temp_point + self
+        return temp_point
+
+    def integerMulti(self, integer):
         temp_point = FieldPoint(self.curve, self.x, self.y)
         ops = self.opOrder(integer)
         for op in ops:
@@ -148,7 +179,7 @@ class EllipticCurve:
         self.b = b
         self.p = mod_p
 
-        self.inf_point = FieldPoint(self, self.p, self.p)
+        self.inf_point = FieldPoint(self, FieldNum(self.p, self.p), FieldNum(self.p, self.p))
         self.points = [self.inf_point]
 
         self.gen_point = next(self.naiveGenPoints())
@@ -169,24 +200,27 @@ class EllipticCurve:
 
     def genPoints(self):
         for i in range(2, self.p):
-            yield self.gen_point.intigerMult(i)
-
+            yield self.gen_point.integerMulti(i)
 
     def checkValid(self):
         return 4 * self.a ** 3 + 27 * self.b ** 2 != 0
 
 
 def main():
-    p = 29
-    a = 4
-    b = 20
+    p = 16001
+    a = 10
+    b = 1
+    P = (1654, 7208)
+    n = 8026
+    Q = (5000, 1283)
 
     ec = EllipticCurve(a, b, p)
-    a = FieldPoint(ec, FieldNum(0, p), FieldNum(7, p))
-    b = FieldPoint(ec, FieldNum(2, p), FieldNum(6, p))
-    c = a + a
 
-    print(list(set([i for i in ec.genPoints()])))
+    f = FieldPoint(ec, FieldNum(5, p), FieldNum(5, p))
+    f.integerMulti(5)
+
+    for i in ec.genPoints():
+        print(i)
 
 
 if __name__ == '__main__':

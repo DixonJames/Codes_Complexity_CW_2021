@@ -15,24 +15,21 @@ class Decrypt:
 
         self.plaintext = self.decrypt().decode('uft-8')
 
-
     def deriveKey(self):
-        b_rep  = bin(self.key_int)[2:]
-        k56_bytes = "0" * (56 -len(b_rep)) + b_rep
+        b_rep = bin(self.key_int)[2:]
+        k56_bytes = "0" * (56 - len(b_rep)) + b_rep
         whole = ""
         for i in range(8):
             p = k56_bytes[i * 7:(i + 1) * 7]
             tot = 0
             for c in p:
                 tot += int(c)
-            if tot%2 == 0:
-                p+=("1")
+            if tot % 2 == 0:
+                p += ("1")
             else:
-                p+=("0")
+                p += ("0")
 
             whole = whole + p
-
-
 
         bytes_8 = int(whole, 2).to_bytes((len(whole) + 7) // 8, byteorder='big')
         return bytes_8
@@ -42,8 +39,9 @@ class Decrypt:
 
 
 class PollardRho:
-    def __init__(self, Q, P, p, n, curve, partitions):
-        self.Q = FieldPoint(x=FieldNum(Q[0], p), y=FieldNum(Q[1], p), curve=curve)
+    def __init__(self, Qa, Qb, P, p, n, curve, partitions):
+        self.Qa = FieldPoint(x=FieldNum(Qa[0], p), y=FieldNum(Qa[1], p), curve=curve)
+        self.Qb = FieldPoint(x=FieldNum(Qb[0], p), y=FieldNum(Qb[1], p), curve=curve)
         self.P = FieldPoint(x=FieldNum(P[0], p), y=FieldNum(P[1], p), curve=curve)
         self.prime = p
         self.n = n
@@ -60,13 +58,13 @@ class PollardRho:
         self.secret = self.sharedSecret()
 
     def sharedSecret(self):
-        return self.Q.integerMulti(self.l).x.value
+        return self.Qb.integerMulti(self.l).x.value
 
     def createPartitions(self):
         self.function_coeffs = []
         for p_n in range(self.part_num):
             a, b = self.randCoeff(), self.randCoeff()
-            self.function_coeffs.append((a, b, self.P.integerMulti(a.value) + self.Q.integerMulti(b.value)))
+            self.function_coeffs.append((a, b, self.P.integerMulti(a.value) + self.Qa.integerMulti(b.value)))
 
     def randCoeff(self):
         return FieldNum(random.randint(0, self.n - 1), self.n)
@@ -74,7 +72,7 @@ class PollardRho:
     def partitionFunction(self, X):
         s = bin(X.x.value)[-4:]
         if X.x.value < 8:
-            s = "0"*(4- len(bin(X.x.value)[2:])) + bin(X.x.value)[2:]
+            s = "0" * (4 - len(bin(X.x.value)[2:])) + bin(X.x.value)[2:]
         try:
             a = int(s, 2)
         except:
@@ -93,7 +91,7 @@ class PollardRho:
         return new_x, new_a, new_b
 
     def checkL(self, l):
-        if self.Q == self.P.integerMulti(l):
+        if self.Qa == self.P.integerMulti(l):
             return True
         return False
 
@@ -101,7 +99,7 @@ class PollardRho:
         a = self.randCoeff()
         b = self.randCoeff()
 
-        X, c, d = self.P.integerMulti(a.value) + self.Q.integerMulti(b.value), a, b
+        X, c, d = self.P.integerMulti(a.value) + self.Qa.integerMulti(b.value), a, b
         Xp, cp, dp = self.orbitStep(X, c, d)
 
         exp_i = int(math.sqrt(math.pi * (self.n / 2)))
@@ -114,51 +112,84 @@ class PollardRho:
             Xp, cp, dp = self.orbitStep(Xp, cp, dp)
 
             if i % 10000 == 0:
-                print(f"~{100*i/exp_i}% done")
+                print(f"~{100 * i / exp_i}% done")
 
         if True == False:
-            if self.P.integerMulti(c.value) + self.Q.integerMulti(d.value) == X and self.P.integerMulti(cp.value) + self.Q.integerMulti(
-                    dp.value) == Xp and X==Xp:
+            if self.P.integerMulti(c.value) + self.Qa.integerMulti(d.value) == X and self.P.integerMulti(
+                    cp.value) + self.Qa.integerMulti(
+                    dp.value) == Xp and X == Xp:
                 print("good coefficients")
-                #print(X.x.value, X.y.value)
+                # print(X.x.value, X.y.value)
 
         return c.value, cp.value, d.value, dp.value
         # l = FieldNum((c - cp)/(dp - d), self.prime).value
+
+    def gcd_m_a(self, c, cp, d, dp):
+        cpp = c - cp
+        dpp = d - dp
+
+        g, x, y = extended_gcd(dpp.value, self.n)
+        new_mod = int(self.n / g)
+        c_base = FieldNum(cpp.value / g, new_mod)
+        b_base = FieldNum(dpp.value / g, new_mod)
+
+        base_point = FieldNum((c_base / b_base).value, self.n)
+
+        step = FieldNum(new_mod, self.n)
+
+        possible_ans = []
+        for i in range(g):
+            t = base_point
+            for j in range(i):
+                t = t + step
+            possible_ans.append(t.value)
+
+        return possible_ans
+
+    def gcd_m_b(self, c, cp, d, dp):
+        cpp = c - cp
+        dpp = d - dp
+
+        g, x, y = extended_gcd(dpp.value, self.n)
+
+        v = FieldNum((x * dpp.value) % self.n, self.n).value
+        w = FieldNum((x * cpp.value) % self.n, self.n).value
+
+        possible_ans = []
+        for k in range(self.n):
+            t = (w / v + k * (self.n / v))%(self.n/g)
+            possible_ans.append(t)
+
+        return list(set(possible_ans))
 
     def fullPollard(self):
         c, cp, d, dp = self.coefficients()
         c, cp, d, dp = FieldNum(c, self.n), FieldNum(cp, self.n), FieldNum(d, self.n), FieldNum(dp, self.n)
 
-        if math.gcd((dp - d).value, self.prime) == 1:
+        if math.gcd((dp - d).value, self.n) == 1:
             l = ((c - cp) / (dp - d)).value
             if self.checkL(l) == True:
                 return l
-            elif self.checkL(l/2) == True:
-                return l/2
+                """elif self.checkL(l / 2) == True:
+                    return l / 2"""
             else:
                 self.createPartitions()
                 return self.fullPollard()
         else:
+            l_a = self.gcd_m_a(c, cp, d, dp)
+            l_b= self.gcd_m_b(c, cp, d, dp)
             # here we go...
-            u = FieldNum(c, self.prime) - FieldNum(cp, self.prime)
-            v = FieldNum(dp, self.prime) - FieldNum(d, self.prime)
 
-            d, x, y = extended_gcd(dp - d, self.prime)
 
-            s = FieldNum(x, self.prime)
-
-            w = s * u
-
-            start = w / FieldNum(d, self.prime)
-            step = FieldNum(self.n, self.prime) / FieldNum(d, self.prime)
-
-            possible_ans = []
-            for i in range(self.n - 1):
-                possible_ans.append((start + FieldNum(step.value * i, self.prime)).value)
-
-            for l in possible_ans:
+            for l in l_a:
                 if self.checkL(l):
                     return l
+            for l in l_b:
+                if self.checkL(l):
+                    return l
+
+            self.createPartitions()
+            return self.fullPollard()
 
         """
         if d == 1: return ((k[2] - j[2]) * inverse(j[1] - k[1], p - 1)) % (p - 1)
@@ -184,7 +215,7 @@ def test_example():
 
     ec = EllipticCurve(a, b, n - 1)
 
-    PR = PollardRho(Q, P, p, n, ec, 16)
+    PR = PollardRho(Q, Q, P, p, n, ec, 16)
     c, cp, d, dp = PR.fullPollard()
 
 
@@ -198,7 +229,7 @@ def Basic_Pollard_rho():
 
     ec = EllipticCurve(a, b, p)
 
-    PR = PollardRho(Q, P, p, n, ec, 16)
+    PR = PollardRho(Q, Q, P, p, n, ec, 16)
     for i in range(10):
         c, cp, d, dp = PR.coefficients()
         print(f"c:{c}, c':{cp}, d:{d}, d':{dp}")
@@ -214,10 +245,11 @@ def Full_Pollard_rho():
 
     ec = EllipticCurve(a, b, p)
 
-    PR = PollardRho(Q, P, p, n, ec, 16)
+    PR = PollardRho(Q, Q, P, p, n, ec, 16)
     l = PR.l
     print(f"l:{l}")
     return l
+
 
 def decrypt():
     ciphertext = "3da46f7b6fa82f53153908bdadcc742ac38e8691e5208aa4bf6be47240c71e75180b9d1030a00810"
@@ -232,23 +264,23 @@ def decrypt():
 
     ec = EllipticCurve(a, b, p)
 
-    PR = PollardRho(QA, P, p, n, ec, 16)
+    """PR = PollardRho(QB, QA, P, p, n, ec, 16)
     secret = PR.secret
-    print(PR.l, secret)
+    print(PR.l, secret)"""
+
+    l_atob = 1682779984167835
+    secret = 6714934996831608
 
     ws = Decrypt(ciphertext, secret)
     print(ws.plaintext, ws.key)
 
 
-
-
 def main():
-    #test_example()
-    #Basic_Pollard_rho()
-    #Full_Pollard_rho()
+    # test_example()
+    # Basic_Pollard_rho()
+    Full_Pollard_rho()
     #
-    decrypt()
-
+    # decrypt()
 
 
 if __name__ == '__main__':

@@ -1,14 +1,29 @@
 import math
 
 
-def EEA(modulus, value):
-    # https://brilliant.org/wiki/extended-euclidean-algorithm/
-    x, y, a, b, = modulus, value, 0, 1
-    while y != 0:
-        a, b = b, a - x // y * b
-        x, y = y, x % y
-    return a
 
+def EEA(a,b):
+    q = [0,0]
+    r = [a,b]
+    s = [1,0]
+    t = [0,1]
+
+    i = 1
+
+    while r[i] > 0:
+        i +=1
+        q.append(r[i-2] // r[i-1])
+        r.append(r[i-2] - q[i] * r[i-1])
+        s.append(s[i-2] - q[i] * s[i-1])
+        t.append(t[i-2] - q[i] * t[i-1])
+
+    return r[i-1], s[i-1], t[i-1]
+
+def invModP(x, p):
+    y = x% p
+    r,s,t = EEA(p,y)
+
+    return t%p
 
 def extended_gcd(a, b):
     if b == 0:
@@ -22,11 +37,19 @@ def extended_gcd(a, b):
     return gcd, x, y
 
 
-
 class FieldNum:
     def __init__(self, value, p):
         self.value = value % p
         self.p = p
+
+    def inversionFieldP(self, p, a):
+        u, v, q = a, p, 0
+        xa, xb = 1, 0
+        while u != 1:
+            q = v // u
+            r, x = v - q * u, xb - q * xa
+            v, u, xa, xb, = u, r, xa, x
+        return xa % p
 
     def __add__(self, other):
         return FieldNum((self.value + other.value) % self.p, self.p)
@@ -38,10 +61,10 @@ class FieldNum:
         return FieldNum(-self.value, self.p)
 
     def __mul__(self, other):
-        return FieldNum((self.value * other.value) % self.p, self.p)
+        return FieldNum((self.value * other.value), self.p)
 
     def __truediv__(self, other):
-        return FieldNum((self * FieldNum(EEA(self.p, other.value), self.p)).value, self.p)
+        return FieldNum((self * FieldNum(invModP(other.value, self.p), self.p)).value, self.p)
 
     def __eq__(self, other):
         if self.value == other.value and self.p == other.p:
@@ -179,7 +202,9 @@ class EllipticCurve:
         self.b = b
         self.p = mod_p
 
-        self.inf_point = FieldPoint(self, FieldNum(self.p, self.p), FieldNum(self.p, self.p))
+        infNUm = FieldNum(self.p, self.p)
+        infNUm.value = self.p
+        self.inf_point = FieldPoint(self, infNUm, infNUm)
         self.points = [self.inf_point]
 
         self.gen_point = next(self.naiveGenPoints())
@@ -216,11 +241,12 @@ def main():
 
     ec = EllipticCurve(a, b, p)
 
-    f = FieldPoint(ec, FieldNum(5, p), FieldNum(5, p))
-    f.integerMulti(5)
+    p = FieldPoint(ec, FieldNum(1654, p), FieldNum(7208, p))
+    Qp = p.integerMulti(2048)
+    print(Qp.x.value, Qp.y.value)
 
-    for i in ec.genPoints():
-        print(i)
+
+
 
 
 if __name__ == '__main__':

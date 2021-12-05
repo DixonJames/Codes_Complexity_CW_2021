@@ -8,13 +8,17 @@ from Elliptic_curve_base import *
 
 class Decrypt:
     def __init__(self, ciphertext, key_int):
+        self.c = ciphertext
         self.ciphertext = bytes.fromhex(ciphertext)
         self.key_int = key_int
         self.key = des.DesKey(self.deriveKey())
 
+        self.plaintext = self.decrypt().decode('uft-8')
+
 
     def deriveKey(self):
-        k56_bytes = [i for i in ("0" * (56 -len(bin(self.key_int)[2:]))) + bin(self.key_int)[2:]]
+        b_rep  = bin(self.key_int)[2:]
+        k56_bytes = "0" * (56 -len(b_rep)) + b_rep
         whole = ""
         for i in range(8):
             p = k56_bytes[i * 7:(i + 1) * 7]
@@ -22,23 +26,19 @@ class Decrypt:
             for c in p:
                 tot += int(c)
             if tot%2 == 0:
-                p.append("1")
+                p+=("1")
             else:
-                p.append("0")
+                p+=("0")
 
-            k8_bytes = ""
-            for s in p:
-                k8_bytes += s
-
-            binary_int = int(k8_bytes, 2)
-            hex_s = hex(binary_int)
-            whole = whole + hex_s
-            print(p)
+            whole = whole + p
 
 
 
-        byte_array = bytearray(whole.encode())
-        return byte_array
+        bytes_8 = int(whole, 2).to_bytes((len(whole) + 7) // 8, byteorder='big')
+        return bytes_8
+
+    def decrypt(self):
+        return self.key.decrypt(self.ciphertext, padding=True)
 
 
 class PollardRho:
@@ -55,7 +55,15 @@ class PollardRho:
 
         self.createPartitions()
 
+        self.l = self.fullPollard()
+
+        self.secret = self.sharedSecret()
+
+    def sharedSecret(self):
+        return self.Q.integerMulti(self.l).x.value
+
     def createPartitions(self):
+        self.function_coeffs = []
         for p_n in range(self.part_num):
             a, b = self.randCoeff(), self.randCoeff()
             self.function_coeffs.append((a, b, self.P.integerMulti(a.value) + self.Q.integerMulti(b.value)))
@@ -64,7 +72,14 @@ class PollardRho:
         return FieldNum(random.randint(0, self.n - 1), self.n)
 
     def partitionFunction(self, X):
-        return int(bin(X.x.value)[-4:], 2)
+        s = bin(X.x.value)[-4:]
+        if X.x.value < 8:
+            s = "0"*(4- len(bin(X.x.value)[2:])) + bin(X.x.value)[2:]
+        try:
+            a = int(s, 2)
+        except:
+            print("d")
+        return a
 
     def orbitStep(self, X, c, p):
         S_num = self.partitionFunction(X)
@@ -98,6 +113,9 @@ class PollardRho:
             Xp, cp, dp = self.orbitStep(Xp, cp, dp)
             Xp, cp, dp = self.orbitStep(Xp, cp, dp)
 
+            if i % 10000 == 0:
+                print(f"~{100*i/exp_i}% done")
+
         if True == False:
             if self.P.integerMulti(c.value) + self.Q.integerMulti(d.value) == X and self.P.integerMulti(cp.value) + self.Q.integerMulti(
                     dp.value) == Xp and X==Xp:
@@ -115,7 +133,10 @@ class PollardRho:
             l = ((c - cp) / (dp - d)).value
             if self.checkL(l) == True:
                 return l
+            elif self.checkL(l/2) == True:
+                return l/2
             else:
+                self.createPartitions()
                 return self.fullPollard()
         else:
             # here we go...
@@ -194,15 +215,29 @@ def Full_Pollard_rho():
     ec = EllipticCurve(a, b, p)
 
     PR = PollardRho(Q, P, p, n, ec, 16)
-    l = PR.fullPollard()
+    l = PR.l
     print(f"l:{l}")
     return l
 
 def decrypt():
     ciphertext = "3da46f7b6fa82f53153908bdadcc742ac38e8691e5208aa4bf6be47240c71e75180b9d1030a00810"
-    l = Full_Pollard_rho()
 
-    ws = Decrypt(ciphertext, l)
+    p = 20376993552394903
+    a = 10
+    b = 1
+    P = (1983, 6761152449250519)
+    n = 1852453970120513
+    QA = (18586784116581871, 12161036958498472)
+    QB = (18432261261031243, 11140924411855488)
+
+    ec = EllipticCurve(a, b, p)
+
+    PR = PollardRho(QA, P, p, n, ec, 16)
+    secret = PR.secret
+    print(PR.l, secret)
+
+    ws = Decrypt(ciphertext, secret)
+    print(ws.plaintext, ws.key)
 
 
 
@@ -210,7 +245,8 @@ def decrypt():
 def main():
     #test_example()
     #Basic_Pollard_rho()
-    #l = Full_Pollard_rho()
+    #Full_Pollard_rho()
+    #
     decrypt()
 
 

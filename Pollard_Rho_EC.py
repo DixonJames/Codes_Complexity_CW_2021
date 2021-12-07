@@ -126,29 +126,30 @@ class PollardRho:
 
     def gcd_m_a(self, c, cp, d, dp):
         cpp = c - cp
-        dpp = d - dp
+        dpp = dp - d
 
         g, x, y = extended_gcd(dpp.value, self.n)
+
         new_mod = int(self.n / g)
-        c_base = FieldNum(cpp.value / g, new_mod)
-        b_base = FieldNum(dpp.value / g, new_mod)
+        c_base = FieldNum(cpp.value / g, self.n)
+        b_base = FieldNum(dpp.value / g, self.n)
 
-        base_point = FieldNum((c_base / b_base).value, self.n)
+        base_point = (c_base / b_base).value
 
-        step = FieldNum(new_mod, self.n)
+        step = FieldNum(new_mod, self.n).value
 
         possible_ans = []
         for i in range(g):
             t = base_point
             for j in range(i):
                 t = t + step
-            possible_ans.append(t.value)
+            possible_ans.append(t)
 
         return possible_ans
 
     def gcd_m_b(self, c, cp, d, dp):
         cpp = c - cp
-        dpp = d - dp
+        dpp = dp - d
 
         g, x, y = extended_gcd(dpp.value, self.n)
 
@@ -159,7 +160,7 @@ class PollardRho:
         for k in range(self.n):
             t = (w / v + k * (self.n / v))%(self.n/g)
             possible_ans.append(t)
-
+        print(set(list(set(possible_ans))))
         return list(set(possible_ans))
 
     def fullPollard(self):
@@ -175,6 +176,7 @@ class PollardRho:
             else:
                 self.createPartitions()
                 return self.fullPollard()
+
         else:
             l_a = self.gcd_m_a(c, cp, d, dp)
             l_b= self.gcd_m_b(c, cp, d, dp)
@@ -278,7 +280,8 @@ def decrypt():
 def main():
     # test_example()
     # Basic_Pollard_rho()
-    Full_Pollard_rho()
+    for _ in range(1000):
+        Full_Pollard_rho()
     #
     # decrypt()
 

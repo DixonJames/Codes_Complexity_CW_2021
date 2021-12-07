@@ -76,7 +76,7 @@ class Basis:
         return LatticeVector(self, x)
 
     def createOrthoginal(self):
-        pass
+        self.orthogonal = GramSchmidt(self).orthogonal_basis
 
 
 class GramSchmidt:
@@ -85,23 +85,75 @@ class GramSchmidt:
         self.orthogonal_basis = self.run()
 
     def proj(self, u, v, normalised=False):
-        u,v = np.array(u), np.array(v)
+        u, v = np.array(u), np.array(v)
         if not normalised:
-            return sum(u*v.T) * u
-        return (sum(u*v.T)/sum(u*u.T)) * u.coeffs
+            return np.dot(u, v) * u
+
+        return np.dot(u, v) / np.dot(u, u) * u
 
     def run(self):
-        us = [list(self.original_basis.vectors[0])]
+        us = np.array([list(self.original_basis.vectors[0])])
 
         for k in range(1, len(self.original_basis.vectors)):
             u_k = self.original_basis.vectors[k]
 
-            for j in range(k - 1):
-                u_k = u_k - self.proj(us[j], self.original_basis.vectors[k])
+            basis_component = u_k - sum(self.proj(u, self.original_basis.vectors[v]) for u, v in
+                             zip([u for u in us], [k for _ in range(k)]))
 
-            us.append(u_k)
+            us = np.append(us, [basis_component], axis=0)
 
-        return np.array(us)
+        return us
+
+
+class LLL:
+    def __init__(self, basis:Basis, delta=3/4):
+        self.orginal_basis = basis
+        self.delta = delta
+
+        self.orginal_basis.createOrthoginal()
+        self.original_orthogonal_basis = self.orginal_basis.orthogonal
+
+        self.u = self.createU(self.original_orthogonal_basis, self.orginal_basis)
+
+    def createU(self, orthogonal, original):
+        basis_dim = self.orginal_basis.dim
+        return [[np.dot(b_i, b_j) for b_j in orthogonal] for b_i in original]
+
+
+    def run(self):
+        b_copy = self.orginal_basis.copy()
+        o_b_copy = self.original_orthogonal_basis.copy()
+        u_copy = self.u.copy()
+
+        k = 1
+        while k <= self.orginal_basis.dim:
+            for j in range(k-1, 0, -1):
+                if u_copy[k][j] > 1/2:
+                    b_copy.vectors[k] = o_b_copy[k] - u_copy[k][j] * b_copy.vectors[j]
+
+                    #the update
+                    b_copy.createOrthoginal()
+                    o_b_copy = self.orginal_basis.orthogonal
+                    u_copy = self.createU(o_b_copy, b_copy)
+
+            if np.dot(o_b_copy[k], o_b_copy[k]) >= (self.delta - (u_copy[k][k-1])**2) * np.dot(o_b_copy[k-1], o_b_copy[k-1]):
+                k+=1
+            else:
+                b_copy[k], b_copy[k-1] = b_copy[k-1], b_copy[k]
+                # the update
+                b_copy.createOrthoginal()
+                o_b_copy = self.orginal_basis.orthogonal
+                u_copy = self.createU(o_b_copy, b_copy)
+                k = max(k-1, 1)
+
+        return b_copy
+
+
+
+
+
+
+
 
 
 class Lattice:
@@ -204,6 +256,7 @@ def testDiffs():
     n = p.norm()
     print(n)
 
+
 def naiveRun():
     path = "latticeBasis.txt"
     basis = Basis(readBasisFile(path))
@@ -212,10 +265,13 @@ def naiveRun():
     shortest_vec = svp.naiveCombo(1000)
     print(shortest_vec.norm())
 
+
 def main():
     path = "latticeBasis.txt"
     basis = Basis(readBasisFile(path))
-    orth = GramSchmidt(basis).original_basis
+    basis.createOrthoginal()
+    orth = basis.orthogonal
+    print(orth)
 
 
 if __name__ == '__main__':

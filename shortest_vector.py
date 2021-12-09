@@ -30,6 +30,13 @@ class LatticeVector:
         self.basis = basis
         self.coeffs = coeffs
 
+        self.coeff_identity = np.array([0 for _ in range(len(coeffs))])
+
+    def nonZero(self):
+        if not all(self.coeffs == self.coeff_identity):
+            return True
+        return False
+
     def value(self):
         """
         :return: co-oridnates of point
@@ -71,8 +78,10 @@ class Basis:
         self.orthogonal = None
 
     def genRandPoint(self):
-        x = np.array(
-            [random.randint(0, math.ceil(self.dim + math.log(self.dim, 2))) for _ in range(self.dim)])
+        x = np.array([0 for _ in range(self.dim)])
+        while not any(x != np.array([0 for _ in range(self.dim)])):
+            x = np.array([random.randint(0, 3) for _ in range(self.dim)])
+        print(x)
         return LatticeVector(self, x)
 
     def createOrthoginal(self):
@@ -98,7 +107,7 @@ class GramSchmidt:
             u_k = self.original_basis.vectors[k]
 
             basis_component = u_k - sum(self.proj(u, self.original_basis.vectors[v]) for u, v in
-                             zip([u for u in us], [k for _ in range(k)]))
+                                        zip([u for u in us], [k for _ in range(k)]))
 
             us = np.append(us, [basis_component], axis=0)
 
@@ -106,7 +115,7 @@ class GramSchmidt:
 
 
 class LLL:
-    def __init__(self, basis:Basis, delta=3/4):
+    def __init__(self, basis: Basis, delta=3 / 4):
         self.orginal_basis = basis
         self.delta = delta
 
@@ -119,7 +128,6 @@ class LLL:
         basis_dim = self.orginal_basis.dim
         return [[np.dot(b_i, b_j) for b_j in orthogonal] for b_i in original]
 
-
     def run(self):
         b_copy = self.orginal_basis.copy()
         o_b_copy = self.original_orthogonal_basis.copy()
@@ -127,33 +135,27 @@ class LLL:
 
         k = 1
         while k <= self.orginal_basis.dim:
-            for j in range(k-1, 0, -1):
-                if u_copy[k][j] > 1/2:
+            for j in range(k - 1, 0, -1):
+                if u_copy[k][j] > 1 / 2:
                     b_copy.vectors[k] = o_b_copy[k] - u_copy[k][j] * b_copy.vectors[j]
 
-                    #the update
+                    # the update
                     b_copy.createOrthoginal()
                     o_b_copy = self.orginal_basis.orthogonal
                     u_copy = self.createU(o_b_copy, b_copy)
 
-            if np.dot(o_b_copy[k], o_b_copy[k]) >= (self.delta - (u_copy[k][k-1])**2) * np.dot(o_b_copy[k-1], o_b_copy[k-1]):
-                k+=1
+            if np.dot(o_b_copy[k], o_b_copy[k]) >= (self.delta - (u_copy[k][k - 1]) ** 2) * np.dot(o_b_copy[k - 1],
+                                                                                                   o_b_copy[k - 1]):
+                k += 1
             else:
-                b_copy[k], b_copy[k-1] = b_copy[k-1], b_copy[k]
+                b_copy[k], b_copy[k - 1] = b_copy[k - 1], b_copy[k]
                 # the update
                 b_copy.createOrthoginal()
                 o_b_copy = self.orginal_basis.orthogonal
                 u_copy = self.createU(o_b_copy, b_copy)
-                k = max(k-1, 1)
+                k = max(k - 1, 1)
 
         return b_copy
-
-
-
-
-
-
-
 
 
 class Lattice:
@@ -181,7 +183,10 @@ class Lattice:
         :param vb: LatticeVector
         :return: LatticeVector
         """
-        return va - vb
+        res = va - vb
+        if res.nonZero():
+            return res
+        return va
 
     def sivAvg(self, va: LatticeVector, vb: LatticeVector) -> LatticeVector:
         """
@@ -193,8 +198,10 @@ class Lattice:
         coeffs = (va.coeffs + vb.coeffs) / 2
         check = sum(coeffs % 1)
         if check != 0:
-            return LatticeVector(self, coeffs)
-        return None
+            res = LatticeVector(self, coeffs)
+        if res.nonZero():
+            return res
+        return va
 
     def modSivAvg(self, va: LatticeVector, vb: LatticeVector) -> LatticeVector:
         """
@@ -212,7 +219,20 @@ class Lattice:
         coeffs = (va.coeffs + n_vb.coeffs) / 2
         coeffs = coeffs.astype(int)
 
-        return LatticeVector(self.basis, coeffs)
+        res = LatticeVector(self.basis, coeffs)
+
+        if res.nonZero():
+            return res
+        return va
+
+    def modSivDIff(self, va: LatticeVector, vb: LatticeVector):
+        diff = self.sivDiff(va, vb)
+        s = diff
+        for candidate_vec in self.vectors:
+            c_diff = self.sivDiff(diff, candidate_vec)
+            if c_diff.norm() < diff.norm():
+                s = c_diff
+        return s
 
 
 class SVP:

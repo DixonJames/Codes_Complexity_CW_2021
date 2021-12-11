@@ -81,7 +81,6 @@ class Basis:
         x = np.array([0 for _ in range(self.dim)])
         while not any(x != np.array([0 for _ in range(self.dim)])):
             x = np.array([random.randint(0, 3) for _ in range(self.dim)])
-        print(x)
         return LatticeVector(self, x)
 
     def createOrthoginal(self):

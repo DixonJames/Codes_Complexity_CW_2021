@@ -24,10 +24,8 @@ def genStartPopulation(population_num, basis: Basis):
 
 
 def score(v: LatticeVector):
-    try:
-        return v.norm()
-    except:
-        print("d")
+    return v.norm()
+
 
 
 def findDuplicate(lst):
@@ -36,8 +34,6 @@ def findDuplicate(lst):
         if lst.count(char) != 1:
             dupes.append(char)
     return dupes
-
-
 
 
 def basicCrossoverVectors(lattice, p, q):
@@ -78,19 +74,19 @@ def testPopulation(population, top_fitness, top_tour):
             top_tour = tour
     return top_fitness, top_tour
 
+
 def mixPops(old, new, basis):
     newlist = old + new + genStartPopulation(10, basis)
-    return sort(old.append(new), key=score)[:100]
+    old.extend(new)
+    return sorted(old, key=score)[:100]
 
 
-
-
-def runTraining(time_frame, basis: Basis, mutation_chance, popsize):
+def runTraining(time_frame, basis: Basis, mutation_chance, pop_size):
     start_time = time.time()
     tau = LatticeVector(basis, [3 for i in range(basis.dim)]).norm()
     top_fitness = LatticeVector(basis, [3 for i in range(basis.dim)]).norm()
     top_tour = []
-    population = genStartPopulation(popsize, basis)
+    population = genStartPopulation(pop_size, basis)
 
     lattice = Lattice(basis)
     lattice.vectors = population
@@ -109,7 +105,7 @@ def runTraining(time_frame, basis: Basis, mutation_chance, popsize):
 
         new_pop = []
 
-        for j in range(popsize):
+        for j in range(pop_size):
             # making as many children as there are parents
             parents = random.choices(lattice.vectors, weights=population_percentage, k=2)
             childA, childB = basicCrossoverVectors(lattice, parents[0], parents[1])
@@ -122,9 +118,7 @@ def runTraining(time_frame, basis: Basis, mutation_chance, popsize):
             else:
                 new_pop.append(childB)
 
-
-
-        lattice.vectors = applyMutations(new_pop, mutation_chance)
+        lattice.vectors = mixPops(lattice.vectors, applyMutations(new_pop, mutation_chance), basis)
 
         top_fitness, top_tour = testPopulation(lattice.vectors, top_fitness, top_tour)
         print(top_tour.norm())

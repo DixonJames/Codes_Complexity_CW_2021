@@ -25,6 +25,24 @@ def randPairing(num):
     return pairs
 
 
+
+class Basis:
+    def __init__(self, vectors):
+        self.vectors = vectors
+        self.dim = len(self.vectors)
+
+        self.orthogonal = None
+
+    def genRandPoint(self):
+        x = np.array([0 for _ in range(self.dim)])
+        while not any(x != np.array([0 for _ in range(self.dim)])):
+            x = np.array([random.randint(0, 3) for _ in range(self.dim)])
+        return LatticeVector(self, x)
+
+    def createOrthoginal(self):
+        self.orthogonal = Basis(GramSchmidt(self).orthogonal_basis)
+
+
 class LatticeVector:
     def __init__(self, basis, coeffs):
         self.basis = basis
@@ -69,22 +87,26 @@ class LatticeVector:
     def innerProd(self, other) -> int:
         return sum(self.basis * other.basis)
 
+    def changeBasis(self, new_basis: Basis, round=True):
+        """
+        :param new_basis: basis to convert into
+        :return: coefficents  for self's vector for the input basis
+        """
+        U = self.basis.vectors.T
+        W = new_basis.vectors.T
+        inv_U = np.linalg.inv(U)
+        inv_W = np.linalg.inv(W)
 
-class Basis:
-    def __init__(self, vectors):
-        self.vectors = vectors
-        self.dim = len(self.vectors)
 
-        self.orthogonal = None
+        if round:
+            nb_coeffs = (np.matmul(inv_W, np.matmul(U, self.coeffs))).astype(int)
+            b_coeffs = (np.matmul(inv_U, np.matmul(W, nb_coeffs))).astype(int)
+        else:
+            nb_coeffs = (np.matmul(inv_W, np.matmul(U, self.coeffs)))
+            b_coeffs = (np.matmul(inv_U, np.matmul(W, nb_coeffs)))
 
-    def genRandPoint(self):
-        x = np.array([0 for _ in range(self.dim)])
-        while not any(x != np.array([0 for _ in range(self.dim)])):
-            x = np.array([random.randint(0, 3) for _ in range(self.dim)])
-        return LatticeVector(self, x)
+        return LatticeVector(new_basis, coeffs=nb_coeffs)
 
-    def createOrthoginal(self):
-        self.orthogonal = GramSchmidt(self).orthogonal_basis
 
 
 class GramSchmidt:
@@ -125,12 +147,12 @@ class LLL:
 
     def createU(self, orthogonal, original):
         basis_dim = self.orginal_basis.dim
-        return [[np.dot(b_i, b_j) for b_j in orthogonal] for b_i in original]
+        return [[np.dot(b_i, b_j) for b_j in orthogonal] for b_i in original.vectors]
 
     def run(self):
-        b_copy = self.orginal_basis.copy()
-        o_b_copy = self.original_orthogonal_basis.copy()
-        u_copy = self.u.copy()
+        b_copy = self.orginal_basis
+        o_b_copy = self.original_orthogonal_basis
+        u_copy = self.u
 
         k = 1
         while k <= self.orginal_basis.dim:
@@ -147,7 +169,7 @@ class LLL:
                                                                                                    o_b_copy[k - 1]):
                 k += 1
             else:
-                b_copy[k], b_copy[k - 1] = b_copy[k - 1], b_copy[k]
+                b_copy.vectors[k], b_copy.vectors[k - 1] = b_copy.vectors[k - 1], b_copy.vectors[k]
                 # the update
                 b_copy.createOrthoginal()
                 o_b_copy = self.orginal_basis.orthogonal
@@ -290,7 +312,15 @@ def main():
     basis = Basis(readBasisFile(path))
     basis.createOrthoginal()
     orth = basis.orthogonal
-    print(orth)
+
+    va = LatticeVector(basis, [1 for i in range(basis.dim)])
+    vb = va.changeBasis(orth, round=False)
+
+    vc = vb.changeBasis(basis, round=False)
+
+    reduces_basis = LLL(basis).run()
+
+
 
 
 if __name__ == '__main__':

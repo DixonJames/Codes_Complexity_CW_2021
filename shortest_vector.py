@@ -25,7 +25,6 @@ def randPairing(num):
     return pairs
 
 
-
 class Basis:
     def __init__(self, vectors):
         self.vectors = vectors
@@ -108,7 +107,6 @@ class LatticeVector:
         return LatticeVector(new_basis, coeffs=nb_coeffs)
 
 
-
 class GramSchmidt:
     def __init__(self, original_basis):
         self.original_basis = original_basis
@@ -136,47 +134,38 @@ class GramSchmidt:
 
 
 class LLL:
-    def __init__(self, basis: Basis, delta=3 / 4):
-        self.orginal_basis = basis
+    def __init__(self, basis: Basis, delta=0.26):
+        self.basis = basis
+        self.basis.createOrthoginal()
         self.delta = delta
 
-        self.orginal_basis.createOrthoginal()
-        self.original_orthogonal_basis = self.orginal_basis.orthogonal
 
-        self.u = self.createU(self.original_orthogonal_basis, self.orginal_basis)
+    def dot(self, u, v):
+        return np.dot(u.T, v.T)
 
-    def createU(self, orthogonal, original):
-        basis_dim = self.orginal_basis.dim
-        return [[np.dot(b_i, b_j) for b_j in orthogonal] for b_i in original.vectors]
+    def createU(self, i, j):
+        basis_dim = self.basis.dim
+        return self.dot(self.basis.vectors[i], self.basis.orthogonal.vectors[j]) / self.dot(self.basis.orthogonal.vectors[j], self.basis.orthogonal.vectors[j])
 
-    def run(self):
-        b_copy = self.orginal_basis
-        o_b_copy = self.original_orthogonal_basis
-        u_copy = self.u
-
+    def runB(self):
         k = 1
-        while k <= self.orginal_basis.dim:
-            for j in range(k - 1, 0, -1):
-                if u_copy[k][j] > 1 / 2:
-                    b_copy.vectors[k] = o_b_copy[k] - u_copy[k][j] * b_copy.vectors[j]
+        while k < self.basis.dim:
+            for j in range(k-1, -1, -1):
+                if abs(self.createU(k, j)) > 0.5:
+                    self.basis.vectors[k] = self.basis.vectors[k] - (self.basis.vectors[j] * int(self.createU(k,j)))
+                    self.basis.createOrthoginal()
 
-                    # the update
-                    b_copy.createOrthoginal()
-                    o_b_copy = self.orginal_basis.orthogonal
-                    u_copy = self.createU(o_b_copy, b_copy)
-
-            if np.dot(o_b_copy[k], o_b_copy[k]) >= (self.delta - (u_copy[k][k - 1]) ** 2) * np.dot(o_b_copy[k - 1],
-                                                                                                   o_b_copy[k - 1]):
-                k += 1
+            k_self_dot = self.dot(self.basis.orthogonal.vectors[k], self.basis.orthogonal.vectors[k])
+            kBelow_self_dot = self.dot(self.basis.orthogonal.vectors[k-1], self.basis.orthogonal.vectors[k-1])
+            if k_self_dot >= (self.delta - self.createU(k, k-1)**2) * kBelow_self_dot:
+                k+=1
             else:
-                b_copy.vectors[k], b_copy.vectors[k - 1] = b_copy.vectors[k - 1], b_copy.vectors[k]
-                # the update
-                b_copy.createOrthoginal()
-                o_b_copy = self.orginal_basis.orthogonal
-                u_copy = self.createU(o_b_copy, b_copy)
-                k = max(k - 1, 1)
+                self.basis.vectors[k], self.basis.vectors[k-1] = self.basis.vectors[k-1], self.basis.vectors[k]
+                self.basis.createOrthoginal()
+                k = max(1, k-1)
 
-        return b_copy
+            print(k)
+        return self.basis
 
 
 class Lattice:
@@ -307,7 +296,7 @@ def naiveRun():
     print(shortest_vec.norm())
 
 
-def main():
+def basisChangeTest():
     path = "latticeBasis.txt"
     basis = Basis(readBasisFile(path))
     basis.createOrthoginal()
@@ -318,7 +307,17 @@ def main():
 
     vc = vb.changeBasis(basis, round=False)
 
-    reduces_basis = LLL(basis).run()
+def main():
+    path = "latticeBasis.txt"
+    basis = Basis(readBasisFile(path))
+    basis.createOrthoginal()
+    orth = basis.orthogonal
+
+    va = LatticeVector(basis, [1 for i in range(basis.dim)])
+    vb = va.changeBasis(orth, round=False)
+    vc = vb.changeBasis(basis, round=False)
+
+    reduces_basis = LLL(basis).runB()
 
 
 

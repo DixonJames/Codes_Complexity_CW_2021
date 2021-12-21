@@ -1,4 +1,6 @@
+import numpy as np
 import random
+from ast import literal_eval
 import time
 
 
@@ -7,10 +9,7 @@ normal_mutation_const = 3
 basis = None
 best_tour = []
 
-import numpy as np
-import math
-import random
-from ast import literal_eval
+
 
 
 def readBasisFile(path):

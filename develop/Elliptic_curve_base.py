@@ -231,7 +231,7 @@ class EllipticCurve:
         return 4 * self.a ** 3 + 27 * self.b ** 2 != 0
 
 
-def main():
+def ECBasemain():
     p = 16001
     a = 10
     b = 1

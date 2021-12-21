@@ -6,6 +6,20 @@ import binascii
 from Elliptic_curve_base import *
 
 
+def writeBasicOutput(name, c, cp, d, dp, p, a, b, P, n, Q):
+    with open(f"{name}.txt", "w") as file:
+        L = [f"Input: p = {p} \n", f"a = {a}\n", f"b = {b}\n", f"P = {P}\n", f"n = {n}\n", f"Q = {Q}\n" "\n",
+             f"Collision: \n", f"c = {c}\n", f"d = {d}\n", f"c' = {cp}\n", f"d' = {dp}\n", ]
+        file.writelines(L)
+
+def writeFullOutput(name, c, cp, d, dp, p, a, b, P, n, Q, l):
+    with open(f"{name}.txt", "w") as file:
+        L = [f"Input: p = {p} \n", f"a = {a}\n", f"b = {b}\n", f"P = {P}\n", f"n = {n}\n", f"Q = {Q}\n" "\n",
+             f"Collision: \n", f"c = {c}\n", f"d = {d}\n", f"c' = {cp}\n", f"d' = {dp}\n", "\n", "Discrete logarithm:\n",f"l = {l}\n" ]
+        file.writelines(L)
+
+
+
 class Decrypt:
     def __init__(self, ciphertext, key_int):
         self.c = ciphertext
@@ -13,7 +27,7 @@ class Decrypt:
         self.key_int = key_int
         self.key = des.DesKey(self.deriveKey())
 
-        self.plaintext = self.decrypt().decode('uft-8')
+        self.plaintext = self.decrypt().decode('utf-8')
 
     def deriveKey(self):
         b_rep = bin(self.key_int)[2:]
@@ -40,6 +54,7 @@ class Decrypt:
 
 class PollardRho:
     def __init__(self, Qa, Qb, P, p, n, curve, partitions):
+        self.c, self.cp, self.d, self.dp = 0,0,0,0
         self.Qa = FieldPoint(x=FieldNum(Qa[0], p), y=FieldNum(Qa[1], p), curve=curve)
         self.Qb = FieldPoint(x=FieldNum(Qb[0], p), y=FieldNum(Qb[1], p), curve=curve)
         self.P = FieldPoint(x=FieldNum(P[0], p), y=FieldNum(P[1], p), curve=curve)
@@ -112,12 +127,10 @@ class PollardRho:
             Xp, cp, dp = self.orbitStep(Xp, cp, dp)
 
             if i % 10000 == 0:
-                print(f"~{100 * i / exp_i}% done")
+                print(f"~{100 * i / exp_i}% of expected searched")
 
-        if True == False:
             if self.P.integerMulti(c.value) + self.Qa.integerMulti(d.value) == X and self.P.integerMulti(
-                    cp.value) + self.Qa.integerMulti(
-                    dp.value) == Xp and X == Xp:
+                    cp.value) + self.Qa.integerMulti(dp.value) == Xp and X == Xp:
                 print("good coefficients")
                 # print(X.x.value, X.y.value)
 
@@ -147,7 +160,7 @@ class PollardRho:
 
         return possible_ans
 
-    def gcd_m_b(self, c, cp, d, dp):
+    def gcd_m(self, c, cp, d, dp):
         cpp = c - cp
         dpp = dp - d
 
@@ -158,53 +171,34 @@ class PollardRho:
 
         possible_ans = []
         for k in range(self.n):
-            t = (w / v + k * (self.n / v))%(self.n/g)
+            t = (w / v + k * (self.n / v)) % (self.n / g)
             possible_ans.append(t)
-        print(set(list(set(possible_ans))))
+        # print(set(list(set(possible_ans))))
         return list(set(possible_ans))
 
     def fullPollard(self):
         c, cp, d, dp = self.coefficients()
+        self.c, self.cp, self.d, self.dp = c, cp, d, dp
         c, cp, d, dp = FieldNum(c, self.n), FieldNum(cp, self.n), FieldNum(d, self.n), FieldNum(dp, self.n)
 
         if math.gcd((dp - d).value, self.n) == 1:
             l = ((c - cp) / (dp - d)).value
             if self.checkL(l) == True:
                 return l
-                """elif self.checkL(l / 2) == True:
-                    return l / 2"""
             else:
                 self.createPartitions()
                 return self.fullPollard()
 
         else:
-            l_a = self.gcd_m_a(c, cp, d, dp)
-            l_b= self.gcd_m_b(c, cp, d, dp)
+            ls = self.gcd_m(c, cp, d, dp)
             # here we go...
 
-
-            for l in l_a:
-                if self.checkL(l):
-                    return l
-            for l in l_b:
+            for l in ls:
                 if self.checkL(l):
                     return l
 
             self.createPartitions()
             return self.fullPollard()
-
-        """
-        if d == 1: return ((k[2] - j[2]) * inverse(j[1] - k[1], p - 1)) % (p - 1)
-        m, l = 0, ((k[2] - j[2]) * inverse(j[1] - k[1], (p - 1) / d)) % ((p - 1) / d)
-        while m <= d:
-            print
-            m, l
-            if pow(g, l, p) == t: return l
-            m, l = m + 1, (l + ((p - 1) / d)) % (p - 1)
-        return False
-        """
-
-        # l = FieldNum((c - cp)/(dp - d), self.prime).value
 
 
 def test_example():
@@ -232,9 +226,9 @@ def Basic_Pollard_rho():
     ec = EllipticCurve(a, b, p)
 
     PR = PollardRho(Q, Q, P, p, n, ec, 16)
-    for i in range(10):
-        c, cp, d, dp = PR.coefficients()
-        print(f"c:{c}, c':{cp}, d:{d}, d':{dp}")
+    c, cp, d, dp = PR.coefficients()
+    writeBasicOutput("ldzc78_basic_output", c, cp, d, dp, p, a, b, P, n, Q)
+    print(f"c:{c}, c':{cp}, d:{d}, d':{dp}")
 
 
 def Full_Pollard_rho():
@@ -249,11 +243,14 @@ def Full_Pollard_rho():
 
     PR = PollardRho(Q, Q, P, p, n, ec, 16)
     l = PR.l
+    c, cp, d, dp = PR.c, PR.cp, PR.d, PR.dp
+
+    writeFullOutput("ldzc78_full_output", c, cp, d, dp, p, a, b, P, n, Q, l)
     print(f"l:{l}")
     return l
 
 
-def decrypt():
+def decrypt(full=True):
     ciphertext = "3da46f7b6fa82f53153908bdadcc742ac38e8691e5208aa4bf6be47240c71e75180b9d1030a00810"
 
     p = 20376993552394903
@@ -266,25 +263,36 @@ def decrypt():
 
     ec = EllipticCurve(a, b, p)
 
-    """PR = PollardRho(QB, QA, P, p, n, ec, 16)
-    secret = PR.secret
-    print(PR.l, secret)"""
-
-    l_atob = 1682779984167835
-    secret = 6714934996831608
+    if full == True:
+        PR = PollardRho(QB, QA, P, p, n, ec, 16)
+        secret = PR.secret
+        print(PR.l, secret)
+    else:
+        # secrets written here for saving time during testing...
+        l_atob = 1682779984167835
+        secret = 6714934996831608
 
     ws = Decrypt(ciphertext, secret)
-    print(ws.plaintext, ws.key)
+    print(ws.plaintext)
 
 
-def main():
-    # test_example()
-    # Basic_Pollard_rho()
-    for _ in range(1000):
+def main(option):
+    if option == 1:
+        Basic_Pollard_rho()
+    if option == 2:
         Full_Pollard_rho()
-    #
-    # decrypt()
+    if option == 3:
+        decrypt(full=True)
+    if option == 4:
+        decrypt(full=False)
 
 
 if __name__ == '__main__':
-    main()
+    i = -1
+    while i not in [1, 2, 3, 4]:
+        print("1: Basic_Pollard_rho")
+        print("2: Full_Pollard_rho")
+        print("3: decrypt ciphertext (long)")
+        print("4: decrypt ciphertext (pre-computed secret)")
+        i = int(input("enter option:"))
+    main(i)

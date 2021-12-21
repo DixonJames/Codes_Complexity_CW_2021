@@ -32,11 +32,13 @@ class Basis:
 
         self.orthogonal = None
 
-    def genRandPoint(self):
+    def genRandPoint(self, minimum=0, maximum=1):
         x = np.array([0 for _ in range(self.dim)])
         while not any(x != np.array([0 for _ in range(self.dim)])):
-            x = np.array([random.randint(0, 3) for _ in range(self.dim)])
-        return LatticeVector(self, x)
+            x = np.array([random.randint(minimum, maximum) for _ in range(self.dim)])
+        v = LatticeVector(self, x)
+        v.source = "rand"
+        return v
 
     def createOrthoginal(self):
         self.orthogonal = Basis(GramSchmidt(self).orthogonal_basis)
@@ -48,9 +50,19 @@ class LatticeVector:
         self.coeffs = coeffs
 
         self.coeff_identity = np.array([0 for _ in range(len(coeffs))])
+        self.source = None
 
-    def nonZero(self):
-        if not all(self.coeffs == self.coeff_identity):
+    def __hash__(self):
+        return int(str(hash(str(self.coeffs)))[:5])
+
+    def nonZero(self, altBasis=None):
+        if altBasis is None:
+            if not all(self.coeffs == self.coeff_identity):
+                return True
+            return False
+
+        alotbasis_v = self.changeBasis(altBasis)
+        if not all(self.coeffs == self.coeff_identity) and not all(alotbasis_v.coeffs == alotbasis_v.coeff_identity):
             return True
         return False
 
@@ -59,7 +71,7 @@ class LatticeVector:
         :return: co-oridnates of point
         """
         try:
-            return np.multiply(self.coeffs, self.basis.vectors)
+            return np.array([sum(v) for v in np.multiply(self.basis.vectors, self.coeffs)])
         except:
             print("d")
 
@@ -67,7 +79,10 @@ class LatticeVector:
         components = self.value()
         t = 0
         sqr = lambda x: x ** 2
-        norm = math.sqrt(sum(sqr(sum(components.T))))
+        try:
+            norm = np.linalg.norm(components.T)
+        except:
+            print("s")
         return norm
 
     def __neg__(self):
@@ -91,11 +106,10 @@ class LatticeVector:
         :param new_basis: basis to convert into
         :return: coefficents  for self's vector for the input basis
         """
-        U = self.basis.vectors.T
-        W = new_basis.vectors.T
+        U = self.basis.vectors
+        W = new_basis.vectors
         inv_U = np.linalg.inv(U)
         inv_W = np.linalg.inv(W)
-
 
         if round:
             nb_coeffs = (np.matmul(inv_W, np.matmul(U, self.coeffs))).astype(int)
@@ -139,32 +153,40 @@ class LLL:
         self.basis.createOrthoginal()
         self.delta = delta
 
-
     def dot(self, u, v):
         return np.dot(u.T, v.T)
 
     def createU(self, i, j):
         basis_dim = self.basis.dim
-        return self.dot(self.basis.vectors[i], self.basis.orthogonal.vectors[j]) / self.dot(self.basis.orthogonal.vectors[j], self.basis.orthogonal.vectors[j])
+        return self.dot(self.basis.vectors[i], self.basis.orthogonal.vectors[j]) / self.dot(
+            self.basis.orthogonal.vectors[j], self.basis.orthogonal.vectors[j])
 
-    def runB(self):
+    def run(self):
+        """
+        based on pseudocode fromT theorem 6.68 in:
+        @book{silverman2008introduction,
+        title={An introduction to mathematical cryptography},
+        author={Silverman, Joseph H and Pipher, Jill and Hoffstein, Jeffrey},
+        year={2008},
+        publisher={Springer}
+        }
+        :return: a reduced basis
+        """
         k = 1
         while k < self.basis.dim:
-            for j in range(k-1, -1, -1):
+            for j in range(k - 1, -1, -1):
                 if abs(self.createU(k, j)) > 0.5:
-                    self.basis.vectors[k] = self.basis.vectors[k] - (self.basis.vectors[j] * int(self.createU(k,j)))
+                    self.basis.vectors[k] = self.basis.vectors[k] - (self.basis.vectors[j] * int(self.createU(k, j)))
                     self.basis.createOrthoginal()
 
             k_self_dot = self.dot(self.basis.orthogonal.vectors[k], self.basis.orthogonal.vectors[k])
-            kBelow_self_dot = self.dot(self.basis.orthogonal.vectors[k-1], self.basis.orthogonal.vectors[k-1])
-            if k_self_dot >= (self.delta - self.createU(k, k-1)**2) * kBelow_self_dot:
-                k+=1
+            kBelow_self_dot = self.dot(self.basis.orthogonal.vectors[k - 1], self.basis.orthogonal.vectors[k - 1])
+            if k_self_dot >= (self.delta - self.createU(k, k - 1) ** 2) * kBelow_self_dot:
+                k += 1
             else:
-                self.basis.vectors[k], self.basis.vectors[k-1] = self.basis.vectors[k-1], self.basis.vectors[k]
+                self.basis.vectors[k], self.basis.vectors[k - 1] = self.basis.vectors[k - 1], self.basis.vectors[k]
                 self.basis.createOrthoginal()
-                k = max(1, k-1)
-
-            print(k)
+                k = max(1, k - 1)
         return self.basis
 
 
@@ -213,7 +235,7 @@ class Lattice:
             return res
         return va
 
-    def modSivAvg(self, va: LatticeVector, vb: LatticeVector) -> LatticeVector:
+    def modSivAvg(self, va: LatticeVector, vb: LatticeVector, altBasis=None) -> LatticeVector:
         """
         modified sieving by differences
         :param va:
@@ -231,17 +253,19 @@ class Lattice:
 
         res = LatticeVector(self.basis, coeffs)
 
-        if res.nonZero():
+        res.source = "MSA"
+        if res.nonZero(altBasis):
             return res
         return va
 
-    def modSivDIff(self, va: LatticeVector, vb: LatticeVector):
+    def modSivDIff(self, va: LatticeVector, vb: LatticeVector, altBasis=None):
         diff = self.sivDiff(va, vb)
         s = diff
         for candidate_vec in self.vectors:
             c_diff = self.sivDiff(diff, candidate_vec)
-            if c_diff.norm() < diff.norm():
+            if c_diff.norm() < diff.norm() and c_diff.nonZero(altBasis):
                 s = c_diff
+        s.source = "MSD"
         return s
 
 
@@ -261,10 +285,11 @@ class SVP:
         for i in range(100):
             r = self.lattice.rankVectors()
             top = r
-            pairs = randPairing(const_num)
+            pairs = randPairing(min(const_num, len(r)))
             new = [self.lattice.modSivAvg(top[pair[0]], top[pair[1]]) for pair in pairs]
 
             self.lattice.vectors = r[int(const_num * 0.1):] + new
+            print(self.lattice.rankVectors()[0].norm())
 
         return self.lattice.rankVectors()[0]
 
@@ -307,20 +332,35 @@ def basisChangeTest():
 
     vc = vb.changeBasis(basis, round=False)
 
+
 def main():
     path = "latticeBasis.txt"
-    basis = Basis(readBasisFile(path))
+    basis_lst = np.array([[37, 20, 96, 20, 34, 64, 82, 56, 47, 21, 50, 49],
+                          [39, 24, 19, 49, 82, 97, 88, 84, 41, 51, 36, 74],
+                          [19, 56, 37, 73, 4, 12, 72, 18, 46, 8, 54, 94],
+                          [13, 46, 26, 8, 83, 71, 45, 84, 21, 32, 53, 80],
+                          [65, 39, 25, 56, 52, 44, 84, 30, 69, 33, 13, 5],
+                          [59, 56, 90, 1, 42, 58, 90, 92, 2, 6, 7, 80],
+                          [18, 14, 26, 31, 91, 93, 77, 64, 95, 36, 23, 5],
+                          [11, 58, 22, 51, 90, 13, 93, 43, 21, 81, 12, 77],
+                          [42, 65, 99, 6, 23, 43, 94, 30, 37, 66, 34, 66],
+                          [99, 31, 24, 44, 18, 58, 17, 27, 70, 88, 59, 11],
+                          [30, 43, 21, 70, 48, 47, 13, 93, 94, 48, 69, 58],
+                          [7, 12, 94, 88, 59, 95, 43, 62, 71, 36, 91, 70]])
+    basis = Basis(basis_lst)
     basis.createOrthoginal()
-    orth = basis.orthogonal
+    reduces_basis = LLL(Basis(readBasisFile(path))).run()
 
-    va = LatticeVector(basis, [1 for i in range(basis.dim)])
-    vb = va.changeBasis(orth, round=False)
-    vc = vb.changeBasis(basis, round=False)
+    coef_trial = [0, 0, 0, -1, 1, -1, 0, 0, 0, 0, 1, 0]  # 97.0
+    coef_trial = [0, -1, 0, 0, 0, -1, 1, 1, -1, 0, 2, -1]  # 80.8
+    # 76.87652437513027 [ 2 -2  0 -1  2 -1 -1 -2  2 -1 -1  3] MSA
+    # 74.96665925596525 [ 1 -1  0 -1  1  0 -1 -1  1  0 -1  2] MSD
+    #72.0832851637604 [-2,  2, -1,  1, -3,  1 , 2 , 2, -2 , 1 , 2, -3] MSA
 
-    reduces_basis = LLL(basis).runB()
-
-
+    va = LatticeVector(basis, coef_trial)
+    vb = va.changeBasis(reduces_basis, round=False)
 
 
 if __name__ == '__main__':
+    # naiveRun()
     main()
